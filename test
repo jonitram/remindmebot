@@ -1,3 +1,0 @@
-test = "bobby jim tim and jon"
-
-print(test.split(' jim '))
