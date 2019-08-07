@@ -3,7 +3,6 @@ import asyncio
 import discord
 from dateparser.search import search_dates
 from dateparser import parse
-from collections import defaultdict
 import datetime
 import re
 
@@ -15,12 +14,21 @@ tokensfile = "tokens.txt"
 
 # a list of message prefixes the bot will respond to
 # index [0] is the default
-command_prefixes = ['rm','remindme','rm!','remindme!','!rm','!remindme']
+command_prefixes = ['rm','remindme','remind','rm!','remindme!','!rm','!remindme']
+
+commands = ['clear','delete','help','reminders','restart']
+command_emojis = ['🇦','🇧','🇨','🇩','🇪']
+
+help_messages = [' \"clear\" : Deletes commands issued to the bot and messages sent by the bot in the current channel (Up to 500 messages back).',
+                 ' \"delete <Reminder>/all\" : Deletes the specified reminder / all of your reminders.',
+                 ' \"help\" : Sends the help message.',
+                 ' \"reminders\" : Sends a list of your active reminders.',
+                 ' \"restart\" : Restarts and updates the bot.']
 
 reminder_tasks = {}
 # Reminder -> background sleep task
-user_reminders = defaultdict(list)
-# user -> []Reminders
+user_reminders = {}
+# user -> Reminders[]
 
 # the discord client
 help_activity = discord.Activity(name='\"' + command_prefixes[0] + ' help\" for help',type=discord.ActivityType.playing)
@@ -36,11 +44,10 @@ def setup_tokens(filename):
     return
 
 class Reminder:
-    def __init__(self, user, message, channel, guild, time=parse("in 1 day"), info=''):
+    def __init__(self, user, message, channel, time=parse("in 1 day"), info=''):
         self.user = user
         self.message = message
         self.channel = channel
-        self.guild = guild
         self.time = time
         self.info = info
     
@@ -56,7 +63,7 @@ class Reminder:
 
     # for debugging
     def to_string(self):
-        print('User Name: {0} Message ID: {1} Channel ID: {2} Guild ID: {3} Time: {4} Info: {5}'.format(self.user.name,self.message.id,self.channel.id,self.guild.id,self.time.strftime("%m/%d/%Y, %H:%M:%S"),self.info))
+        print('User Name: {0} Message ID: {1} Channel ID: {2} Time: {3} Info: {4}'.format(self.user.name,self.message.id,self.channel.id,self.time.strftime("%m/%d/%Y, %H:%M:%S"),self.info))
 
 @client.event
 async def on_message(message):
@@ -70,9 +77,6 @@ async def on_message(message):
                 elif parameters[0] == 'reminders':
                     # display all reminders for that user
                     return
-                elif parameters[0] == 'deleteall':
-                    # delete all reminders
-                    return
                 elif parameters[0] == 'clear':
                     # clear
                     return
@@ -80,11 +84,13 @@ async def on_message(message):
                     # restart + update
                     return
             elif parameters[0] == 'delete':
+                if len(parameters) == 2 and parameters[1] == 'all':
+                    return
                 # delete reminder
                 return
             else:
                 # assume its reminder otherwise
-                asyncio.create_task(create_reminders(message))
+                asyncio.get_event_loop().create_task(create_reminders(message))
                 # async create task send confirmation
             return
     # if auther == bot and begins with confirmation message
@@ -97,7 +103,7 @@ async def create_reminders(message):
     no_prefix = message.content[message.content.find(' ')+1:]
 
     # extract times from no_prefix
-    extracted_times = search_dates(no_prefix, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first', 'RELATIVE_BASE' : message.created_at})
+    extracted_times = search_dates(no_prefix, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
 
     # if extracted_times == None -> error and return
 
@@ -116,15 +122,17 @@ async def create_reminders(message):
     reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
 
     for i in range(max(len(extracted_times),len(reminder_messages))):
-        new_reminder = Reminder(message.author,message,message.channel,message.guild)
+        new_reminder = Reminder(message.author,message,message.channel)
         if i in range(len(extracted_times)):
             new_reminder.time = extracted_times[i][1]
         if i in range(len(reminder_messages)):
             new_reminder.info = reminder_messages[i]
+        if message.author not in user_reminders:
+            user_reminders[message.author] = []
         user_reminders[message.author].append(new_reminder)
         # create task for sleeping and append to remind_tasks
-        # asyncio.run_coroutine_threadsafe(run_reminder(new_reminder),asyncio.get_event_loop())
-        asyncio.create_task(run_reminder(new_reminder))
+        asyncio.get_event_loop().create_task(run_reminder(new_reminder))
+
     
     # debugging
     for key in user_reminders.keys():
@@ -133,11 +141,12 @@ async def create_reminders(message):
             # await run_reminder(user_reminders[key][i])
 
 async def run_reminder(reminder):
-    delay = reminder.time - datetime.datetime.now()
-    await asyncio.sleep(delay.total_seconds())
-    await reminder.channel.send(reminder.info)
-    # while datetime.datetime.now() < reminder.time:
-    #     await asyncio.sleep(1)
+    # delay = reminder.time - datetime.datetime.now()
+    # await asyncio.sleep(delay.total_seconds())
+    # await reminder.channel.send(reminder.info)
+    original_timestamp = reminder.message.created_at.strftime("%m/%d/%Y, %H:%M:%S")
+    reminder_message = '{0} Reminder for \"{1}\" from {2}.\nHere is a link to the original message: {3}'.format(reminder.message.author.mention, reminder.info,original_timestamp,reminder.message.jump_url) 
+    await reminder.channel.send(reminder_message)
     # delete from user_reminders and reminder_tasks
     # while True:
     #     if datetime.datetime.now() >= reminder.time:
@@ -145,7 +154,6 @@ async def run_reminder(reminder):
     #         return
     #     else:
     #         await asyncio.sleep(1)
-    print(reminder.info)
     return
 
 # main function
@@ -153,12 +161,13 @@ def main():
     setup_tokens(tokensfile)
     # setup existing reminders, read from JSON
     # build_help_message()
-    asyncio.get_event_loop().create_task(client.start(discord_token))
-    try:
-        asyncio.get_event_loop().run_forever()
-    except KeyboardInterrupt:
-        asyncio.get_event_loop().run_until_complete(client.logout())
-    finally:
-        asyncio.get_event_loop().stop()
+    client.run(discord_token)
+    # asyncio.get_event_loop().create_task(client.start(discord_token))
+    # try:
+    #     asyncio.get_event_loop().run_forever()
+    # except KeyboardInterrupt:
+    #     asyncio.get_event_loop().run_until_complete(client.logout())
+    # finally:
+    #     asyncio.get_event_loop().stop()
 
 if __name__ == "__main__": main()
