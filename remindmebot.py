@@ -5,12 +5,15 @@ from dateparser.search import search_dates
 from dateparser import parse
 import datetime
 import re
+import os
+import pickle
 
 # api tokens
 discord_token=None
 
 # the text file that the tokens are stored in
 tokensfile = "tokens.txt"
+reminders_file = "reminders.json"
 
 # a list of message prefixes the bot will respond to
 # index [0] is the default
@@ -207,8 +210,8 @@ async def on_raw_reaction_add(payload):
     return
 
 
-def build_help_message():
-    result = ' Create a reminder by using any message prefix with a specified message and a specified time. A reminder can be created without a message and a reminder can be created without a specified time (defaults to 1 day).'
+def build_help_message(mention):
+    result = mention + ' Create a reminder by using any message prefix with a specified message and a specified time. A reminder can be created without a message and a reminder can be created without a specified time (defaults to 1 day).'
     result += '\nHere is a list of message prefixes the bot will respond to: '
     for i in range(len(command_prefixes)-1):
         result += '\"' + command_prefixes[i] + '\", '
@@ -300,19 +303,23 @@ async def run_reminder(reminder):
     del reminder_tasks[reminder]
     return
 
+def save_reminders():
+    with open(reminders_file, 'w+') as outfile:
+        pickle.dump([reminder.__dict__ for reminder in reminder_tasks.keys()],outfile)
+    return
+
 # main function
 def main():
     setup_tokens(tokensfile)
     # setup existing reminders, read from JSON
-    # build_help_message()
-    client.run(discord_token)
-    # asyncio.get_event_loop().create_task(client.start(discord_token))
-    # try:
-    #     asyncio.get_event_loop().run_forever()
-    # except KeyboardInterrupt:
-    #     need to change keyboard interrupt to write out existing reminders to json before exiting
-    #     asyncio.get_event_loop().run_until_complete(client.logout())
-    # finally:
-    #     asyncio.get_event_loop().stop()
+    # client.run(discord_token)
+    try:
+        asyncio.get_event_loop().run_until_complete(client.start(discord_token))
+    except KeyboardInterrupt:
+        # need to change keyboard interrupt to write out existing reminders to json before exiting
+        save_reminders()
+        asyncio.get_event_loop().run_until_complete(client.logout())
+    finally:
+        asyncio.get_event_loop().close()
 
 if __name__ == "__main__": main()
