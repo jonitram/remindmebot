@@ -167,7 +167,9 @@ client = discord.Client(activity=help_activity)
 
 @client.event
 async def on_ready():
+    print('Loading in saved reminders:')
     await load_reminders(save_file)
+    print('Done. The bot is ready to go!')
     return
 
 @client.event
