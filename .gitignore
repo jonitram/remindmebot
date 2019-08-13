@@ -14,5 +14,5 @@
 # tokens file
 tokens.txt
 
-# persistent data for reminders file
-reminders.*
+# persistent pickled data
+*.pkl
