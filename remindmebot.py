@@ -8,6 +8,10 @@ import os
 import pickle
 import re
 
+### TODO ###
+# need to add catching exceptions for DM reminders
+# ^ that won't stop the bot, but will cause terminal to output tons of random garbage
+
 ### GLOBAL VARIABLES ###
 
 # api tokens
