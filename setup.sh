@@ -52,6 +52,7 @@ else
 fi
 if [ $buildtokens == "y" ]; then
     touch tokens.txt
-    read -sp $'\nPlease input your youtube token:' y_token
-    echo $y_token >> tokens.txt
+    read -sp $'\nPlease input your discord token:' d_token
+    echo $d_token >> tokens.txt
 fi
+
