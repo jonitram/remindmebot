@@ -36,9 +36,9 @@ help_messages = [' \"clear\" : Deletes commands issued to the bot and messages s
 
 # in the order they appear
 confirmation_options = ['Delete this reminder (Will also delete both messages).',
-                        'Delete both messages.',
                         'Delete this message.',
-                        'Delete the message that created this reminder.']
+                        'Delete the message that created this reminder.',
+                        'Delete both messages.']
 
 # Reminder -> asyncio task running the reminder
 reminder_tasks = {}
@@ -68,6 +68,8 @@ class Reminder:
         return hash((self.message_id, self.reminder_time, self.info))
     
     def __eq__(self, other):
+        if other == None:
+            return False
         return (self.message_id, self.reminder_time, self.info) == (other.message_id, other.reminder_time, other.info)
     
     def __ne__(self, other):
@@ -99,12 +101,13 @@ def build_reaction_options(options):
     result += '|'
     return result
 
-def build_reminders(user):
+async def build_reminders(user):
     result = user.mention + ' Here is a list of your active reminders:'
-    index = 1
+    index = 0
     if user in user_reminders:
         if len(user_reminders[user]) > 0:
             for reminder in user_reminders[user]:
+                index += 1
                 result += '\n{0} - \"{1}\" for {2} in this channel: '.format(index, reminder.info, reminder.reminder_time)
                 try:
                     channel_name = client.get_channel(reminder.channel_id).name
@@ -118,8 +121,7 @@ def build_reminders(user):
                     pass
                 else:
                     result += 'Here is a link to the original message: {0}'.format(message.jump_url)
-            index += 1
-    if index == 1:
+    if index == 0:
         result += '\nYou have no active reminders!'
     return result
 
@@ -147,6 +149,7 @@ async def load_reminders(input_file):
                     reminders.append(pickle.load(infile))
                 except EOFError:
                     break
+        infile.close()
         os.remove(input_file)
     for reminder in reminders:
         user = client.get_user(reminder.user_id)
@@ -173,13 +176,13 @@ async def on_message(message):
         if message.content.lower().startswith(prefix):
             _, _, removed_prefix = message.content.lower().partition(' ')
             parameters = removed_prefix.split()
-            if len(parameters > 0):
+            if len(parameters) > 0:
                 if len(parameters) == 1:
                     if parameters[0] == 'help':
                         await message.channel.send(build_help_message(message.author.mention))
                         return
                     elif parameters[0] == 'reminders':
-                        await message.channel.send(build_reminders(message.author))
+                        await message.channel.send(await build_reminders(message.author))
                         return
                     elif parameters[0] == 'clear':
                         asyncio.create_task(clear_messages(message))
@@ -214,35 +217,35 @@ async def on_message(message):
 async def on_raw_reaction_add(payload):
     if payload.emoji.name in emojis:
         channel = client.get_channel(payload.channel_id)
-        message = await channel.fetch_message(payload.message_id)
-        if message.author.id == client.user.id and client.user.id != payload.user_id:
+        this_message = await channel.fetch_message(payload.message_id)
+        if this_message.author.id == client.user.id and client.user.id != payload.user_id:
             option = emojis.index(payload.emoji.name)
             user = client.get_user(payload.user_id)
             # confirmation options
-            if message.content.endswith(build_reaction_options(confirmation_options)):
-                if message.content[:message.content.find(' ')].replace('!','') == user.mention:
+            if this_message.content.endswith(build_reaction_options(confirmation_options)):
+                if this_message.content[:this_message.content.find(' ')].replace('!','') == user.mention:
                     for reminder in user_reminders[user]:
                         try:
                             confirmation = await channel.fetch_message(reminder.confirmation_id)
                         except discord.NotFound:
                             continue
                         else:
-                            if confirmation.content == message.content:
+                            if confirmation.content == this_message.content:
                                 if option == 0:
                                     await cancel_reminder(reminder)
                                     return
                                 if option == 1 or option == 3:
+                                    await this_message.delete()
+                                if option == 2 or option == 3:
                                     try:
-                                        message = await channel.fetch_message(reminder.message_id)
+                                        trigger_message = await channel.fetch_message(reminder.message_id)
                                     except discord.NotFound:
                                         pass
                                     else:
-                                        await message.delete()
-                                if option == 2 or option == 3:
-                                    await message.delete()
+                                        await trigger_message.delete()
                             return
             # help message
-            elif message.content.endswith(build_help_message('')):
+            elif this_message.content.endswith(build_help_message('')):
                 await channel.send(user.mention + help_messages[emojis.index(payload.emoji.name)])
                 return
     return
@@ -276,7 +279,8 @@ async def restart(message):
 async def create_reminders(message):
     global reminder_tasks, user_reminders
     # remove prefix from content and remove first space
-    _, _, removed_prefix = message.content.partition(' ').strip()
+    _, _, removed_prefix = message.content.partition(' ')
+    removed_prefix.strip()
     # extract times from removed_prefix
     extracted_times = search_dates(removed_prefix, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
     if extracted_times != None:
@@ -299,13 +303,13 @@ async def create_reminders(message):
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.strftime("%H:%M:%S on %b %d, %Y"))
         if i in range(len(extracted_times)):
-            if extracted_times[i][1] < datetime.datetime.now():
-                error_message = message.author.mention + ' You cannot create a reminder set to go off in the past. The reminder \"{0}\" set to go off at {1} was not created.'.format(new_reminder.info, new_reminder.reminder_time)
-                await message.channel.send(error_message)
-                return
             new_reminder.reminder_time = extracted_times[i][1].strftime("%H:%M:%S on %b %d, %Y")
         if i in range(len(reminder_messages)):
             new_reminder.info = reminder_messages[i]
+        if parse(new_reminder.reminder_time) < datetime.datetime.now():
+            error_message = message.author.mention + ' You cannot create a reminder set to go off in the past. The reminder \"{0}\" set to go off at {1} was not created.'.format(new_reminder.info, new_reminder.reminder_time)
+            await message.channel.send(error_message)
+            return
         if message.author not in user_reminders:
             user_reminders[message.author] = []
         confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}.\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options))
@@ -321,6 +325,7 @@ async def create_reminders(message):
     return
 
 async def run_reminder(reminder):
+    global user_reminders, reminder_tasks
     user = client.get_user(reminder.user_id)
     result = '{0} Reminder for \"{1}\" from {2}.'.format(user.mention, reminder.info, reminder.creation_time) 
     expiration = parse(reminder.reminder_time)
@@ -334,10 +339,9 @@ async def run_reminder(reminder):
     else:
         result += ' Here is a link to the original message: {0}'.format(message.jump_url)
     # send reminder
-    await reminder.channel.send(result)
-
+    await client.get_channel(reminder.channel_id).send(result)
     # clear global lists
-    user_reminders[reminder.user].remove(reminder)
+    user_reminders[user].remove(reminder)
     del reminder_tasks[reminder]
     return
 
