@@ -49,6 +49,8 @@ reminder_tasks = {}
 # user -> Reminder[]
 user_reminders = {}
 
+reminder_limit = 20
+
 ### REMINDER CLASS ####
 
 class Reminder:
@@ -318,6 +320,11 @@ async def create_reminders(message):
             return
         if message.author not in user_reminders:
             user_reminders[message.author] = []
+        elif len(user_reminders[message.author]) > reminder_limit:
+            error_message = message.author.mention + ' You have hit the limit on the maximum number of reminders that can be created. (' + str(reminder_limit) + '). '
+            error_message += 'Please delete a reminder before creating a new one.'
+            await message.channel.send(error_message)
+            return
         confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}.\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options))
         confirmation = await message.channel.send(confirmation_message)
         new_reminder.confirmation_id = confirmation.id
