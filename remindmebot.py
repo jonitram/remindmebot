@@ -314,7 +314,7 @@ async def create_reminders(message):
             new_reminder.reminder_time = extracted_times[i][1].strftime("%H:%M:%S on %b %d, %Y")
         if i in range(len(reminder_messages)):
             new_reminder.info = reminder_messages[i]
-        if parse(new_reminder.reminder_time) < datetime.datetime.now():
+        if parse(new_reminder.reminder_time) < datetime.now():
             error_message = message.author.mention + ' You cannot create a reminder set to go off in the past. The reminder \"{0}\" set to go off at {1} was not created.'.format(new_reminder.info, new_reminder.reminder_time)
             await message.channel.send(error_message)
             return
@@ -343,7 +343,7 @@ async def run_reminder(reminder):
     result = '{0} Reminder for \"{1}\" from {2}.'.format(user.mention, reminder.info, reminder.creation_time) 
     expiration = parse(reminder.reminder_time)
     # check constantly with micro sleeps
-    while datetime.datetime.now() < expiration:
+    while datetime.now() < expiration:
         await asyncio.sleep(0.1)
     try:
         message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
