@@ -121,12 +121,13 @@ async def build_reminders(user):
                     result += 'Bot DMs. '
                 else:
                     result += '\"{0}\". '.format(channel_name)
-                try:
-                    message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
-                except discord.NotFound:
-                    pass
-                else:
-                    result += 'Here is a link to the original message: {0}'.format(message.jump_url)
+                # removed linking original message because long reminder lists would hang
+                # try:
+                #     message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
+                # except discord.NotFound:
+                #     pass
+                # else:
+                #     result += 'Here is a link to the original message: {0}'.format(message.jump_url)
     if index == 0:
         result += '\nYou have no active reminders!'
     return result
