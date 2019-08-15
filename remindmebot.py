@@ -4,6 +4,7 @@ from dateparser import parse
 from dateparser.search import search_dates
 from datetime import datetime, timezone
 import discord
+import multiprocessing
 import os
 import pickle
 import re
@@ -290,8 +291,10 @@ async def create_reminders(message):
     # remove prefix from content and remove first space
     _, _, removed_prefix = message.content.partition(' ')
     removed_prefix.strip()
+    # remove mentions by user ID because it messes with parsing
+    removed_prefix_mentions = re.sub('<@!?\\d+>', '', removed_prefix)
     # extract times from removed_prefix
-    extracted_times = search_dates(removed_prefix, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
+    extracted_times = search_dates(removed_prefix_mentions, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
     if extracted_times != None:
         # add extracted time strings to delimiters list
         delimiters = []
