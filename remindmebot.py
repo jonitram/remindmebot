@@ -52,6 +52,9 @@ user_reminders = {}
 
 reminder_limit = 20
 
+# multiprocessing shared data manager
+manager = multiprocessing.Manager()
+
 ### REMINDER CLASS ####
 
 class Reminder:
@@ -189,10 +192,10 @@ async def on_message(message):
             if len(parameters) > 0:
                 if len(parameters) == 1:
                     if parameters[0] == 'help':
-                        await message.channel.send(build_help_message(message.author.mention))
+                        asyncio.create_task(message.channel.send(build_help_message(message.author.mention)))
                         return
                     elif parameters[0] == 'list':
-                        await message.channel.send(await list_reminders(message.author))
+                        asyncio.create_task(message.channel.send(await list_reminders(message.author)))
                         return
                     elif parameters[0] == 'clear':
                         asyncio.create_task(clear_messages(message))
@@ -212,7 +215,7 @@ async def on_message(message):
                             if reminder != None:
                                 asyncio.create_task(cancel_reminder(reminder))
                                 return
-            await create_reminders(message)
+            asyncio.create_task(create_reminders(message))
             return
         if message.author.id == client.user.id:
             if message.content.endswith(build_reaction_options(confirmation_options)):
@@ -242,7 +245,7 @@ async def on_raw_reaction_add(payload):
                         else:
                             if confirmation.content == this_message.content:
                                 if option == 0:
-                                    await cancel_reminder(reminder)
+                                    asyncio.create_task(cancel_reminder(reminder))
                                     return
                                 if option == 1 or option == 3:
                                     await this_message.delete()
@@ -256,7 +259,7 @@ async def on_raw_reaction_add(payload):
                             return
             # help message
             elif this_message.content.endswith(build_help_message('')):
-                await channel.send(user.mention + help_messages[emojis.index(payload.emoji.name)])
+                asyncio.create_task(channel.send(user.mention + help_messages[emojis.index(payload.emoji.name)]))
                 return
     return
 
@@ -286,20 +289,20 @@ async def restart(message):
 
 ### REMINDER INTERACTION ###
 
-async def create_reminders(message):
-    global reminder_tasks, user_reminders
+def parse_message(message_content, reminder_messages, extracted_times):
     # remove prefix from content and remove first space
-    _, _, removed_prefix = message.content.partition(' ')
+    _, _, removed_prefix = message_content.partition(' ')
     removed_prefix.strip()
     # remove mentions by user ID because it messes with parsing
     removed_prefix_mentions = re.sub('<@!?\\d+>', '', removed_prefix)
     # extract times from removed_prefix
-    extracted_times = search_dates(removed_prefix_mentions, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
-    if extracted_times != None:
+    searched_times = search_dates(removed_prefix_mentions, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
+    if searched_times != None:
         # add extracted time strings to delimiters list
         delimiters = []
-        for i in range(len(extracted_times)):
-            delimiters.append(extracted_times[i][0])
+        for i in range(len(searched_times)):
+            delimiters.append(searched_times[i][0])
+            extracted_times.append(searched_times[i][1])
         # create regex pattern of time strings from delimiters list
         regex_pattern = '|'.join(map(re.escape, delimiters))
         # split message from the first space (to exclude the prefix) by regex pattern
@@ -308,10 +311,17 @@ async def create_reminders(message):
         reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
     # edge case where only a message is input with no time
     else:
-        # weird bug where if extracted_times == () -> wouldn't execute loop below
+        # weird bug where if searched_times == () -> wouldn't execute loop below
         extracted_times = ()
         reminder_messages = [removed_prefix]
-    
+    return
+
+async def create_reminders(message):
+    global reminder_tasks, user_reminders
+    reminder_messages = manager.list()
+    extracted_times = manager.list()
+    parsing_task = multiprocessing.Process(target=parse_message, args=(message.content, reminder_messages, extracted_times))
+    parsing_task.join()
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime("%H:%M:%S on %b %d, %Y"))
         if i in range(len(extracted_times)):
