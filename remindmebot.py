@@ -24,7 +24,7 @@ save_file = "saved_reminders.pkl"
 
 # message prefixes the bot will respond to
 # index [0] is the default
-bot_prefixes = ['rm','remind']
+bot_prefixes = ['rmb','remind']
 
 # list of emojis for reaction options
 emojis = ['🇦','🇧','🇨','🇩','🇪']
