@@ -326,7 +326,7 @@ async def create_reminders(message):
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime("%H:%M:%S on %b %d, %Y"))
         if i in range(len(extracted_times)):
-            new_reminder.reminder_time = extracted_times[i][1].strftime("%H:%M:%S on %b %d, %Y")
+            new_reminder.reminder_time = extracted_times[i].strftime("%H:%M:%S on %b %d, %Y")
         if i in range(len(reminder_messages)):
             new_reminder.info = reminder_messages[i]
         if parse(new_reminder.reminder_time) < datetime.now():
