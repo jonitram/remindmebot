@@ -30,13 +30,13 @@ bot_prefixes = ['rmb','remind']
 # list of emojis for reaction options
 emojis = ['🇦','🇧','🇨','🇩','🇪']
 
-commands = ['clear','delete','help','reminders','restart']
+commands = ['clear','delete','help','list','restart']
 # parallel arrays; need to match indices
 help_messages = [' \"clear\" : Deletes commands issued to the bot and messages sent by the bot in the current channel (Up to 500 messages back).',
                  ' \"delete <Reminder>/all\" : Deletes the specified reminder / all of your reminders.'
                      '\nYou can specify a reminder using its reminder message or its number on the \"reminders\" list',
                  ' \"help\" : Sends the help message.',
-                 ' \"reminders\" : Sends a list of your active reminders.',
+                 ' \"list\" : Sends a list of your active reminders.',
                  ' \"restart\" : Restarts and updates the bot.']
 
 # in the order they appear
@@ -108,7 +108,7 @@ def build_reaction_options(options):
     result += '|'
     return result
 
-async def build_reminders(user):
+async def list_reminders(user):
     result = user.mention + ' Here is a list of your active reminders:'
     index = 0
     if user in user_reminders:
@@ -191,8 +191,8 @@ async def on_message(message):
                     if parameters[0] == 'help':
                         await message.channel.send(build_help_message(message.author.mention))
                         return
-                    elif parameters[0] == 'reminders':
-                        await message.channel.send(await build_reminders(message.author))
+                    elif parameters[0] == 'list':
+                        await message.channel.send(await list_reminders(message.author))
                         return
                     elif parameters[0] == 'clear':
                         asyncio.create_task(clear_messages(message))
