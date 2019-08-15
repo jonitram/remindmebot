@@ -321,6 +321,7 @@ async def create_reminders(message):
     reminder_messages = manager.list()
     extracted_times = manager.list()
     parsing_task = multiprocessing.Process(target=parse_message, args=(message.content, reminder_messages, extracted_times))
+    parsing_task.start()
     parsing_task.join()
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime("%H:%M:%S on %b %d, %Y"))
