@@ -306,14 +306,12 @@ def parse_message(message_content, reminder_messages, extracted_times):
         # create regex pattern of time strings from delimiters list
         regex_pattern = '|'.join(map(re.escape, delimiters))
         # split message from the first space (to exclude the prefix) by regex pattern
-        reminder_messages = re.split(regex_pattern, removed_prefix)
-        # strip each message of leading and trailing whitespace
-        reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
+        for reminder_message in re.split(regex_pattern, removed_prefix):
+            reminder_messages.append(reminder_message)
     # edge case where only a message is input with no time
     else:
         # weird bug where if searched_times == () -> wouldn't execute loop below
-        extracted_times = ()
-        reminder_messages = [removed_prefix]
+        reminder_messages.append(removed_prefix)
     return
 
 async def create_reminders(message):
@@ -323,6 +321,8 @@ async def create_reminders(message):
     parsing_task = multiprocessing.Process(target=parse_message, args=(message.content, reminder_messages, extracted_times))
     parsing_task.start()
     parsing_task.join()
+    # strip each message of leading and trailing whitespace
+    reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime("%H:%M:%S on %b %d, %Y"))
         if i in range(len(extracted_times)):
