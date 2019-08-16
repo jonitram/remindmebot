@@ -58,7 +58,7 @@ manager = multiprocessing.Manager()
 ### REMINDER CLASS ####
 
 class Reminder:
-    def __init__(self, user_id, message_id, channel_id, creation_time, reminder_time=parse("in 1 day").strftime("%H:%M:%S on %b %d, %Y"), info='', confirmation_id=None):
+    def __init__(self, user_id, message_id, channel_id, creation_time, reminder_time=(datetime.datetime.now() + datetime.timedelta(days=1)).strftime("%H:%M:%S on %b %d, %Y"), info='', confirmation_id=None):
         self.user_id = user_id
         self.message_id = message_id
         self.channel_id = channel_id
