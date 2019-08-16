@@ -23,7 +23,7 @@ $ sh setup.sh
 1. To start the bot, run this command: 
 
 ```
-$ python3.7 soundboardbot.py`
+$ python3.7 soundboardbot.py
 ```
  
 2. To issue commands to the bot in discord, use the message prefix "rmb" followed by a space and the command. For example, this message will display usage of each of the bot's commands: 
