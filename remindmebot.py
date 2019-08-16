@@ -192,10 +192,10 @@ async def on_message(message):
             if len(parameters) > 0:
                 if len(parameters) == 1:
                     if parameters[0] == 'help':
-                        asyncio.create_task(message.channel.send(build_help_message(message.author.mention)))
+                        await message.channel.send(build_help_message(message.author.mention))
                         return
                     elif parameters[0] == 'list':
-                        asyncio.create_task(message.channel.send(await list_reminders(message.author)))
+                        await message.channel.send(await list_reminders(message.author))
                         return
                     elif parameters[0] == 'clear':
                         asyncio.create_task(clear_messages(message))
