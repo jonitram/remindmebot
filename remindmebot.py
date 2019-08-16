@@ -359,8 +359,11 @@ async def run_reminder(reminder):
     result = '{0} Reminder for \"{1}\" from {2}.'.format(user.mention, reminder.info, reminder.creation_time) 
     expiration = parse(reminder.reminder_time)
     # check constantly with micro sleeps
-    while datetime.now() < expiration:
-        await asyncio.sleep(0.1)
+    # while datetime.now() < expiration:
+    #     await asyncio.sleep(0.1)
+    # big sleep optimization
+    if datetime.now() < expiration:
+        await asyncio.sleep((expiration - datetime.now()).total_seconds())
     try:
         message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
     except discord.NotFound:
