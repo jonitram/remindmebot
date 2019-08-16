@@ -321,7 +321,7 @@ async def create_reminders(message):
     parsing_task = multiprocessing.Process(target=parse_message, args=(message.content, reminder_messages, extracted_times))
     parsing_task.start()
     while parsing_task.is_alive():
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(1)
     # strip each message of leading and trailing whitespace
     reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
     for i in range(max(len(extracted_times),len(reminder_messages))):
