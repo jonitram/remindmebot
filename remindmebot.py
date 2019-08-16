@@ -259,7 +259,7 @@ async def on_raw_reaction_add(payload):
                             return
             # help message
             elif this_message.content.endswith(build_help_message('')):
-                asyncio.create_task(channel.send(user.mention + help_messages[emojis.index(payload.emoji.name)]))
+                await channel.send(user.mention + help_messages[emojis.index(payload.emoji.name)])
                 return
     return
 
