@@ -3,6 +3,7 @@ import asyncio
 from dateparser import parse
 from dateparser.search import search_dates
 from datetime import datetime, timezone
+import time
 import discord
 import multiprocessing
 import os
@@ -341,7 +342,7 @@ async def create_reminders(message):
             error_message += 'Please delete a reminder before creating a new one.'
             await message.channel.send(error_message)
             return
-        confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}.\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options))
+        confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}. The timezone of the pi is: {4}\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options),time.tzname)
         confirmation = await message.channel.send(confirmation_message)
         new_reminder.confirmation_id = confirmation.id
         user_reminders[message.author].append(new_reminder)
