@@ -368,11 +368,16 @@ async def run_reminder(reminder):
     try:
         message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
     except discord.NotFound:
-        pass
+        await client.get_channel(reminder.channel_id).send(result)
     else:
-        result += ' Here is a link to the original message: {0}'.format(message.jump_url)
+        embed = Discord.embed(
+            content = result,
+            description = ' Here is a [link](' + message.jump_url + ') to the original message.'
+            color = 9570046
+            )
+        await client.get_channel(reminder.channel_id).send(embed = embed)
     # send reminder
-    await client.get_channel(reminder.channel_id).send(result)
+    
     # clear global lists
     user_reminders[user].remove(reminder)
     del reminder_tasks[reminder]
