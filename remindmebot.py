@@ -370,7 +370,7 @@ async def run_reminder(reminder):
     except discord.NotFound: #send with no hyperlink
         await client.get_channel(reminder.channel_id).send(result)
     else: #send with hyperlink
-        embed = Discord.embed(
+        embed = discord.Embed(
             content = result,
             description = ' Here is a [link](' + message.jump_url + ') to the original message.',
             color = 9570046
