@@ -371,11 +371,10 @@ async def run_reminder(reminder):
         await client.get_channel(reminder.channel_id).send(result)
     else: #send with hyperlink
         embed = discord.Embed(
-            content = result,
             description = ' Here is a [link](' + message.jump_url + ') to the original message.',
             color = 9570046
             )
-        await client.get_channel(reminder.channel_id).send(embed = embed)
+        await client.get_channel(reminder.channel_id).send(content = result, embed = embed)
     # clear global lists
     user_reminders[user].remove(reminder)
     del reminder_tasks[reminder]
