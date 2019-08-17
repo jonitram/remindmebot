@@ -2,7 +2,8 @@
 import asyncio
 from dateparser import parse
 from dateparser.search import search_dates
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import time
 import discord
 import multiprocessing
 import os
@@ -30,13 +31,13 @@ bot_prefixes = ['rmb','remind']
 # list of emojis for reaction options
 emojis = ['🇦','🇧','🇨','🇩','🇪']
 
-commands = ['clear','delete','help','reminders','restart']
+commands = ['clear','delete','help','list','restart']
 # parallel arrays; need to match indices
 help_messages = [' \"clear\" : Deletes commands issued to the bot and messages sent by the bot in the current channel (Up to 500 messages back).',
                  ' \"delete <Reminder>/all\" : Deletes the specified reminder / all of your reminders.'
                      '\nYou can specify a reminder using its reminder message or its number on the \"reminders\" list',
                  ' \"help\" : Sends the help message.',
-                 ' \"reminders\" : Sends a list of your active reminders.',
+                 ' \"list\" : Sends a list of your active reminders.',
                  ' \"restart\" : Restarts and updates the bot.']
 
 # in the order they appear
@@ -52,10 +53,13 @@ user_reminders = {}
 
 reminder_limit = 20
 
+# multiprocessing shared data manager
+manager = multiprocessing.Manager()
+
 ### REMINDER CLASS ####
 
 class Reminder:
-    def __init__(self, user_id, message_id, channel_id, creation_time, reminder_time=parse("in 1 day").strftime("%H:%M:%S on %b %d, %Y"), info='', confirmation_id=None):
+    def __init__(self, user_id, message_id, channel_id, creation_time, reminder_time=(datetime.now() + timedelta(days=1)).strftime("%H:%M:%S on %b %d, %Y"), info='', confirmation_id=None):
         self.user_id = user_id
         self.message_id = message_id
         self.channel_id = channel_id
@@ -108,7 +112,7 @@ def build_reaction_options(options):
     result += '|'
     return result
 
-async def build_reminders(user):
+async def list_reminders(user):
     result = user.mention + ' Here is a list of your active reminders:'
     index = 0
     if user in user_reminders:
@@ -191,8 +195,8 @@ async def on_message(message):
                     if parameters[0] == 'help':
                         await message.channel.send(build_help_message(message.author.mention))
                         return
-                    elif parameters[0] == 'reminders':
-                        await message.channel.send(await build_reminders(message.author))
+                    elif parameters[0] == 'list':
+                        await message.channel.send(await list_reminders(message.author))
                         return
                     elif parameters[0] == 'clear':
                         asyncio.create_task(clear_messages(message))
@@ -212,7 +216,7 @@ async def on_message(message):
                             if reminder != None:
                                 asyncio.create_task(cancel_reminder(reminder))
                                 return
-            await create_reminders(message)
+            asyncio.create_task(create_reminders(message))
             return
         if message.author.id == client.user.id:
             if message.content.endswith(build_reaction_options(confirmation_options)):
@@ -242,7 +246,7 @@ async def on_raw_reaction_add(payload):
                         else:
                             if confirmation.content == this_message.content:
                                 if option == 0:
-                                    await cancel_reminder(reminder)
+                                    asyncio.create_task(cancel_reminder(reminder))
                                     return
                                 if option == 1 or option == 3:
                                     await this_message.delete()
@@ -286,36 +290,45 @@ async def restart(message):
 
 ### REMINDER INTERACTION ###
 
-async def create_reminders(message):
-    global reminder_tasks, user_reminders
+def parse_message(message_content, reminder_messages, extracted_times):
     # remove prefix from content and remove first space
-    _, _, removed_prefix = message.content.partition(' ')
+    _, _, removed_prefix = message_content.partition(' ')
     removed_prefix.strip()
     # remove mentions by user ID because it messes with parsing
     removed_prefix_mentions = re.sub('<@!?\\d+>', '', removed_prefix)
     # extract times from removed_prefix
-    extracted_times = search_dates(removed_prefix_mentions, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
-    if extracted_times != None:
+    searched_times = search_dates(removed_prefix_mentions, settings={'PREFER_DATES_FROM' : 'future', 'PREFER_DAY_OF_MONTH' : 'first'})
+    if searched_times != None:
         # add extracted time strings to delimiters list
         delimiters = []
-        for i in range(len(extracted_times)):
-            delimiters.append(extracted_times[i][0])
+        for i in range(len(searched_times)):
+            delimiters.append(searched_times[i][0])
+            extracted_times.append(searched_times[i][1])
         # create regex pattern of time strings from delimiters list
         regex_pattern = '|'.join(map(re.escape, delimiters))
         # split message from the first space (to exclude the prefix) by regex pattern
-        reminder_messages = re.split(regex_pattern, removed_prefix)
-        # strip each message of leading and trailing whitespace
-        reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
+        for reminder_message in re.split(regex_pattern, removed_prefix):
+            reminder_messages.append(reminder_message)
     # edge case where only a message is input with no time
     else:
-        # weird bug where if extracted_times == () -> wouldn't execute loop below
-        extracted_times = ()
-        reminder_messages = [removed_prefix]
-    
+        # weird bug where if searched_times == () -> wouldn't execute loop below
+        reminder_messages.append(removed_prefix)
+    return
+
+async def create_reminders(message):
+    global reminder_tasks, user_reminders
+    reminder_messages = manager.list()
+    extracted_times = manager.list()
+    parsing_task = multiprocessing.Process(target=parse_message, args=(message.content, reminder_messages, extracted_times))
+    parsing_task.start()
+    while parsing_task.is_alive():
+        await asyncio.sleep(1)
+    # strip each message of leading and trailing whitespace
+    reminder_messages = [reminder_message.strip() for reminder_message in reminder_messages if reminder_message]
     for i in range(max(len(extracted_times),len(reminder_messages))):
         new_reminder = Reminder(message.author.id,message.id,message.channel.id,message.created_at.replace(tzinfo=timezone.utc).astimezone(tz=None).strftime("%H:%M:%S on %b %d, %Y"))
         if i in range(len(extracted_times)):
-            new_reminder.reminder_time = extracted_times[i][1].strftime("%H:%M:%S on %b %d, %Y")
+            new_reminder.reminder_time = extracted_times[i].strftime("%H:%M:%S on %b %d, %Y")
         if i in range(len(reminder_messages)):
             new_reminder.info = reminder_messages[i]
         if parse(new_reminder.reminder_time) < datetime.now():
@@ -329,7 +342,7 @@ async def create_reminders(message):
             error_message += 'Please delete a reminder before creating a new one.'
             await message.channel.send(error_message)
             return
-        confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}.\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options))
+        confirmation_message = '{0} A reminder has been created for \"{1}\" and has been set to go off at {2}. The timezone of the pi is: {4}\nReact to this message with these reactions to perform these commands:\n{3}'.format(message.author.mention, new_reminder.info, new_reminder.reminder_time, build_reaction_options(confirmation_options),time.tzname)
         confirmation = await message.channel.send(confirmation_message)
         new_reminder.confirmation_id = confirmation.id
         user_reminders[message.author].append(new_reminder)
@@ -347,8 +360,11 @@ async def run_reminder(reminder):
     result = '{0} Reminder for \"{1}\" from {2}.'.format(user.mention, reminder.info, reminder.creation_time) 
     expiration = parse(reminder.reminder_time)
     # check constantly with micro sleeps
-    while datetime.now() < expiration:
-        await asyncio.sleep(0.1)
+    # while datetime.now() < expiration:
+    #     await asyncio.sleep(0.1)
+    # big sleep optimization
+    if datetime.now() < expiration:
+        await asyncio.sleep((expiration - datetime.now()).total_seconds())
     try:
         message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
     except discord.NotFound:
