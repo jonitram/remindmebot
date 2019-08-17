@@ -367,17 +367,15 @@ async def run_reminder(reminder):
         await asyncio.sleep((expiration - datetime.now()).total_seconds())
     try:
         message = await client.get_channel(reminder.channel_id).fetch_message(reminder.message_id)
-    except discord.NotFound:
+    except discord.NotFound: #send with no hyperlink
         await client.get_channel(reminder.channel_id).send(result)
-    else:
+    else: #send with hyperlink
         embed = Discord.embed(
             content = result,
-            description = ' Here is a [link](' + message.jump_url + ') to the original message.'
+            description = ' Here is a [link](' + message.jump_url + ') to the original message.',
             color = 9570046
             )
         await client.get_channel(reminder.channel_id).send(embed = embed)
-    # send reminder
-    
     # clear global lists
     user_reminders[user].remove(reminder)
     del reminder_tasks[reminder]
